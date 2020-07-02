@@ -37,6 +37,7 @@ def computeKeypointsAndDescriptors(image, sigma=1.6, num_intervals=3, assumed_bl
 def generateBaseImage(image, sigma, assumed_blur):
     """Generate base image from input image by upsampling by 2 in both directions and blurring
     """
+    print('Generating base image...')
     logger.debug('Generating base image...')
     image = resize(image, (0, 0), fx=2, fy=2, interpolation=INTER_LINEAR)
     sigma_diff = sqrt(max((sigma ** 2) - ((2 * assumed_blur) ** 2), 0.01))
@@ -50,6 +51,7 @@ def computeNumberOfOctaves(image_shape):
 def generateGaussianKernels(sigma, num_intervals):
     """Generate list of gaussian kernels at which to blur the input image. Default values of sigma, intervals, and octaves follow section 3 of Lowe's paper.
     """
+    print('Generating scales...')
     logger.debug('Generating scales...')
     num_images_per_octave = num_intervals + 3
     k = 2 ** (1. / num_intervals)
@@ -65,6 +67,7 @@ def generateGaussianKernels(sigma, num_intervals):
 def generateGaussianImages(image, num_octaves, gaussian_kernels):
     """Generate scale-space pyramid of Gaussian images
     """
+    print('Generating Gaussian images...')
     logger.debug('Generating Gaussian images...')
     gaussian_images = []
 
@@ -82,6 +85,7 @@ def generateGaussianImages(image, num_octaves, gaussian_kernels):
 def generateDoGImages(gaussian_images):
     """Generate Difference-of-Gaussians image pyramid
     """
+    print('Generating Difference-of-Gaussian images...')
     logger.debug('Generating Difference-of-Gaussian images...')
     dog_images = []
 
@@ -99,6 +103,7 @@ def generateDoGImages(gaussian_images):
 def findScaleSpaceExtrema(gaussian_images, dog_images, num_intervals, sigma, image_border_width, contrast_threshold=0.04):
     """Find pixel positions of all scale-space extrema in the image pyramid
     """
+    print('Finding scale-space extrema...')
     logger.debug('Finding scale-space extrema...')
     threshold = floor(0.5 * contrast_threshold / num_intervals * 255)  # from OpenCV implementation
     keypoints = []
@@ -142,6 +147,7 @@ def localizeExtremumViaQuadraticFit(i, j, image_index, octave_index, num_interva
     """Iteratively refine pixel positions of scale-space extrema via quadratic fit around each extremum's neighbors
     """
     logger.debug('Localizing scale-space extrema...')
+    print('Localizing scale-space extrema...')
     extremum_is_outside_image = False
     image_shape = dog_images_in_octave[0].shape
     for attempt_index in range(num_attempts_until_convergence):
@@ -220,6 +226,7 @@ def computeHessianAtCenterPixel(pixel_array):
 def computeKeypointsWithOrientations(keypoint, octave_index, gaussian_image, radius_factor=3, num_bins=36, peak_ratio=0.8, scale_factor=1.5):
     """Compute orientations for each keypoint
     """
+    print('Computing keypoint orientations...')
     logger.debug('Computing keypoint orientations...')
     keypoints_with_orientations = []
     image_shape = gaussian_image.shape
@@ -334,6 +341,7 @@ def unpackOctave(keypoint):
 def generateDescriptors(keypoints, gaussian_images, window_width=4, num_bins=8, scale_multiplier=3, descriptor_max_value=0.2):
     """Generate descriptors for each keypoint
     """
+    print('Generating descriptors...')
     logger.debug('Generating descriptors...')
     descriptors = []
 

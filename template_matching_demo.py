@@ -3,24 +3,99 @@ import cv2
 import pysift
 from matplotlib import pyplot as plt
 import logging
+import time
+
 logger = logging.getLogger(__name__)
 
 MIN_MATCH_COUNT = 10
 
-img1 = cv2.imread('box.png', 0)           # queryImage
-img2 = cv2.imread('box_in_scene.png', 0)  # trainImage
+start = time.time()
+img1 = cv2.imread('1.jpg', 0)           # queryImage
+img2 = cv2.imread('2.jpg', 0)           # trainImage
 
-# Compute SIFT keypoints and descriptors
-kp1, des1 = pysift.computeKeypointsAndDescriptors(img1)
-kp2, des2 = pysift.computeKeypointsAndDescriptors(img2)
+orb = cv2.ORB_create()
+
+kp1, des1 = orb.detectAndCompute(img1, None)
+kp2, des2 = orb.detectAndCompute(img2, None)
 
 # Initialize and use FLANN
-FLANN_INDEX_KDTREE = 0
-index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
-search_params = dict(checks = 50)
+FLANN_INDEX_LSH = 6
+# index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
+
+index_params= dict(algorithm = FLANN_INDEX_LSH,
+                   table_number=6,
+                   key_size=12,
+                   multi_probe_level=1)
+
+search_params = dict(checks = 20)
 flann = cv2.FlannBasedMatcher(index_params, search_params)
 matches = flann.knnMatch(des1, des2, k=2)
+matchesMask = [[0, 0] for i in range(len(matches))]
 
+
+# store all the good matches as per Lowe's ratio test.
+good = []
+for m,n in matches:
+    if m.distance < 0.8*n.distance:
+        good.append(m)
+
+if len(good)>MIN_MATCH_COUNT:
+    src_pts = np.float32([ kp1[m.queryIdx].pt for m in good ]).reshape(-1, 1, 2)
+    dst_pts = np.float32([ kp2[m.trainIdx].pt for m in good ]).reshape(-1, 1, 2)
+
+    M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 50)
+    matchesMask = mask.ravel().tolist()
+
+    h,w = img1.shape
+    pts = np.float32([[0, 0], [0, h-1], [w-1, h-1], [w-1, 0]]).reshape(-1, 1, 2)
+    dst = cv2.perspectiveTransform(pts,M)
+
+    img2 = cv2.polylines(img2,[np.int32(dst)],True,255,3, cv2.LINE_AA)
+
+else:
+    print("Not enough matches are found - %d/%d" % (len(good),MIN_MATCH_COUNT))
+    matchesMask = None
+
+draw_params = dict(matchColor = (0,255,0), # draw matches in green color
+                   singlePointColor = None,
+                   matchesMask = matchesMask, # draw only inliers
+                   flags = 2)
+
+img3 = cv2.drawMatches(img1, kp1, img2, kp2, good, None, **draw_params)
+
+plt.imshow(img3, 'gray'),\
+plt.show()
+
+cv2.imwrite('output.png', img3)
+end = time.time()
+time_cost = (end-start)*1000
+print("cost:%.4f ms" % time_cost)
+
+
+"""
+for i, (m, n) in enumerate(matches):
+    if m.distance < 0.7 * n.distance:
+        matchesMask[i] = [1, 0]
+
+drawParams = dict(matchColor=(0, 255, 0),
+                  singlePointColor=(255, 0, 0),
+                  matchesMask=matchesMask,
+                  flags=0)
+resultImage = cv2.drawMatchesKnn(img1, kp1, img2, kp2, matches, None, **drawParams)
+
+end = time.time()
+time_cost = (end-start)*1000
+print("cost:%.4f ms" %(time_cost))
+cv2.namedWindow('Flann', cv2.WINDOW_NORMAL)
+cv2.resizeWindow('Flann', 400, 600)
+cv2.imwrite('output.png', resultImage)
+cv2.imshow('Flann', resultImage)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
+"""
+
+
+"""
 # Lowe's ratio test
 good = []
 for m, n in matches:
@@ -65,3 +140,6 @@ if len(good) > MIN_MATCH_COUNT:
     plt.show()
 else:
     print("Not enough matches are found - %d/%d" % (len(good), MIN_MATCH_COUNT))
+"""
+
+
