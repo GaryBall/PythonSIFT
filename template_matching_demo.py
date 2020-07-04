@@ -14,7 +14,7 @@ def main():
 
     prior_check = ()
 
-    for i in range(2):
+    for i in range(10):
         img1 = cv2.imread('test/logo_l.jpg', 0)  # queryImage
         img2 = cv2.imread('test/logo_s.jpg', 0)  # trainImage
         # img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
@@ -168,11 +168,11 @@ def detect_small_img(img1, img2, prior_check):
         time_cost = (end - start) * 1000
         print("cost:%.4f ms" % time_cost)
 
-        cv2.namedWindow('detector', cv2.WINDOW_NORMAL)
-        cv2.resizeWindow('detector', 800, 300)
-        cv2.imshow('detector', img_detect)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        # cv2.namedWindow('detector', cv2.WINDOW_NORMAL)
+        # cv2.resizeWindow('detector', 800, 300)
+        # cv2.imshow('detector', img_detect)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
 
     else:
         print("Not enough matches are found - %d/%d" % (len(good), MIN_MATCH_COUNT))

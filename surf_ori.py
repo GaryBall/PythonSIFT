@@ -2,7 +2,6 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 
-
 class FeatureMatching:
     # 官方教程的目标图片是query image
     def __init__(self, query_image='data/query.jpg'):
@@ -20,8 +19,6 @@ class FeatureMatching:
         self.shape_query = self.img_query.shape[:2]  # 注意，rows，cols，对应的是y和x，后面的角点坐标的x,y要搞清楚
         #  detectAndCompute函数返回关键点和描述符
         self.key_query, self.desc_query = self.sift.detectAndCompute(self.img_query, None)
-        # 设置FLANN对象
-        #  FLANN_INDEX_KDTREE = 0
         FLANN_INDEX_LSH = 6
         index_params = dict(algorithm=FLANN_INDEX_LSH,
                             table_number=6,
@@ -30,8 +27,7 @@ class FeatureMatching:
 
         search_params = dict(checks=50)
         self.flann = cv2.FlannBasedMatcher(index_params, search_params)
-        # index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
-        # search_params = dict(checks=50)
+
         # 保存最后一次计算的单应矩阵
         self.last_hinv = np.zeros((3, 3))
         # 保存没有找到目标的帧的数量
@@ -45,7 +41,6 @@ class FeatureMatching:
     def _extract_features(self, frame):
         # self.min_hessian = 400
         # sift = cv2.xfeatures2d.SURF_create(self.min_hessian)
-        # sift = cv2.xfeatures2d.SIFT_create()
         sift = cv2.ORB_create()
         #  detectAndCompute函数返回关键点和描述符，mask为None
         key_train, desc_train = sift.detectAndCompute(frame, None)
@@ -65,10 +60,9 @@ class FeatureMatching:
 
     def _detect_corner_points(self, key_frame, good_matches):
         # 将所有好的匹配的对应点的坐标存储下来
-        src_points = np.float32([key_frame[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-
-        dst_points = np.float32([self.key_query[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-        H, mask = cv2.findHomography(src_points, dst_points, cv2.RANSAC, 20)
+        src_points = np.float32([self.key_query[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        dst_points = np.float32([key_frame[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
+        H, mask = cv2.findHomography(src_points, dst_points, cv2.RANSAC, 5.0)
         matchesMask = mask.ravel().tolist()
         # 有了H单应性矩阵，我们可以查看源点被映射到img_query中的位置
         # src_corners = np.float32([(0, 0), (self.shape_train[1], 0), (self.shape_train[1], self.shape_train[0]),
@@ -101,9 +95,8 @@ class FeatureMatching:
         return img_front
 
     def match(self, frame):
-        # img_train = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        # cv2.waitKey(0)
-        img_train = frame.copy()
+        img_train = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        cv2.waitKey(0)
         shape_train = img_train.shape[:2]  # rows,cols
 
         # 获得好的matches
@@ -115,28 +108,19 @@ class FeatureMatching:
             self.num_frames_no_success += 1
             return False, frame
         # 画出匹配的点
-
         img_match = cv2.drawMatchesKnn(self.img_query, self.key_query, img_train, key_train, [good_matches], None,
                                        flags=2)
         plt.imshow(img_match), plt.show()
 
         # 在query_image中找到对应的角点
         dst_corners, Hinv, matchesMask = self._detect_corner_points(key_train, good_matches)
-
-        img_dst = cv2.polylines(self.img_query, [np.int32(dst_corners)], True, (0, 255, 255), 5, cv2.LINE_AA)
-
-        cv2.namedWindow('detector', cv2.WINDOW_NORMAL)
-        cv2.resizeWindow('detector', 800, 300)
-        cv2.imshow('detector', img_dst)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
         # 如果这些点位置距离图片内太远（至少20像素），那么意味着我们没有找到我们感兴趣
         # 的目标或者说是目标没有完整的出现在图片内，对于这两种情况，我们都视为False
         dst_ravel = dst_corners.ravel()
         if (dst_ravel > shape_train[0] + 20).any() and (dst_ravel > -20).any() \
                 and (dst_ravel > shape_train[1] + 20).any():
             self.num_frames_no_success += 1
-            print("点位置距离图片太远")
+            print("点位置距离图片内太远")
             return False, frame
 
         # 如果4个角点没有围出一个合理的四边形，意味着我们可能没有找到我们的目标。
@@ -158,7 +142,6 @@ class FeatureMatching:
         # 如果面积太大或太小，将它排除
         if area < np.prod(shape_train) / 16. or area > np.prod(shape_train) / 2.:
             self.num_frames_no_success += 1
-            print("面积过大")
             return False, frame
 
         # 如果我们此时发现的单应性矩阵和上一次发现的单应性矩阵变化太大，意味着我们可能找到了
@@ -170,7 +153,6 @@ class FeatureMatching:
         similar = np.linalg.norm(Hinv - self.last_hinv) < self.max_error_hinv
         if recent and not similar and not self.first_frame:
             self.num_frames_no_success += self.num_frames_no_success
-            print("与上一帧不相似")
             return False, frame
         # 第一次检测标志置否
         self.first_frame = False
@@ -181,19 +163,18 @@ class FeatureMatching:
                            singlePointColor=None,
                            matchesMask=matchesMask,  # draw only inliers
                            flags=2)
-
-
-        img_dst = cv2.drawMatches(img_dst, self.key_query, img_dst, key_train, good_matches, None,
+        img_dst = cv2.polylines(img_train, [np.int32(dst_corners)], True, (0, 255, 255), 5, cv2.LINE_AA)
+        img_dst = cv2.drawMatches(self.img_query, self.key_query, img_dst, key_train, good_matches, None,
                                   **draw_params)
-        # plt.imshow(img_dst)
-        # plt.show()
+        plt.imshow(img_dst)
+        plt.show()
 
         img_center = self._center_keypoints(frame, key_train, good_matches)
-        # plt.imshow(img_center)
-        # plt.show()
+        plt.imshow(img_center)
+        plt.show()
 
         # 转换成正面视角
         img_front = self._frontal_keypoints(frame, Hinv)
-        # plt.imshow(img_front)
-        # plt.show()
+        plt.imshow(img_front)
+        plt.show()
         return True, img_dst

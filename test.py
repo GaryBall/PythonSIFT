@@ -1,5 +1,5 @@
 import cv2
-from surf import FeatureMatching
+from surf_ori import FeatureMatching
 
 img_train = cv2.imread('test/2.jpg')
 
