@@ -6,7 +6,7 @@ import time
 
 MIN_MATCH_COUNT = 10
 FLANN_INDEX_LSH = 6
-SCAN_RATIO = 0.5
+SCAN_RATIO = 0.2
 
 
 def main():
@@ -15,8 +15,8 @@ def main():
     prior_check = ()
 
     for i in range(10):
-        img1 = cv2.imread('test/logo_l.jpg', 0)  # queryImage
-        img2 = cv2.imread('test/logo_s.jpg', 0)  # trainImage
+        img1 = cv2.imread('test/timer_ex.jpg', 0)  # queryImage
+        img2 = cv2.imread('test/timer_s.jpg', 0)  # trainImage
         # img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
         # img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
 
@@ -128,14 +128,19 @@ def detect_small_img(img1, img2, prior_check):
         if count == 0:
             count = 1
 
-        avg_xl = avg_xl / count
-        avg_yl = avg_yl / count
-        avg_xr = avg_xr / count
-        avg_yr = avg_yr / count
-        pt1 = kp1[max[0]].pt
-        pt2 = kp1[min[0]].pt
-        pt3 = kp2[max[1]].pt
-        pt4 = kp2[min[1]].pt
+        try:
+            avg_xl = avg_xl / count
+            avg_yl = avg_yl / count
+            avg_xr = avg_xr / count
+            avg_yr = avg_yr / count
+            pt1 = kp1[max[0]].pt
+            pt2 = kp1[min[0]].pt
+            pt3 = kp2[max[1]].pt
+            pt4 = kp2[min[1]].pt
+        except:
+            print("SCAN RATIO too low")
+            return 0
+
 
         # print(h1, w1, h2, w2)
         dis_rate = np.sqrt((pt1[0] - pt2[0]) ** 2 + (pt1[1] - pt2[1]) ** 2) / np.sqrt(
