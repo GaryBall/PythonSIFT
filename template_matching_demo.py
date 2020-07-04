@@ -6,7 +6,7 @@ import time
 
 MIN_MATCH_COUNT = 10
 FLANN_INDEX_LSH = 6
-SCAN_RATIO = 0.2
+SCAN_RATIO = 0.5
 
 
 def main():
@@ -14,14 +14,14 @@ def main():
 
     prior_check = ()
 
-    for i in range(10):
-        img1 = cv2.imread('test/timer_ex.jpg', 0)  # queryImage
-        img2 = cv2.imread('test/timer_s.jpg', 0)  # trainImage
+    for i in range(3):
+        img1 = cv2.imread('test/1.jpg', 0)  # queryImage
+        img2 = cv2.imread('test/2.jpg', 0)  # trainImage
         # img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
         # img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
 
         # brisk_detector(img1, img2)
-
+        prior_check = ()
         img3, prior_check = detect_small_img(img1, img2, prior_check)
         if prior_check:
             cv2.namedWindow('detector', cv2.WINDOW_NORMAL)
@@ -49,6 +49,8 @@ def detect_small_img(img1, img2, prior_check):
         img_l = img1.copy()
         h1, w1 = img_l.shape
         h2, w2 = img_r.shape
+        print("shape:")
+        print(img_r.shape)
         ld_y = 0
         ru_y = h1
         ld_x = 0
@@ -71,7 +73,10 @@ def detect_small_img(img1, img2, prior_check):
 
     search_params = dict(checks=50)
     flann = cv2.FlannBasedMatcher(index_params, search_params)
-    matches = flann.knnMatch(des1, des2, k=2)
+    if (des1 is not None) and (des2 is not None):
+        matches = flann.knnMatch(des1, des2, k=2)
+    else:
+        return 0, ()
 
     # store all the good matches as per Lowe's ratio test.
     good = []
@@ -118,7 +123,7 @@ def detect_small_img(img1, img2, prior_check):
         # h,w = img1.shape
         pts = np.float32([[0, 0], [0, h2 - 1], [w2 - 1, h2 - 1], [w2 - 1, 0]]).reshape(-1, 1, 2)
         dst = cv2.perspectiveTransform(pts, M)
-        img_l = cv2.polylines(img_l, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
+        # img_l = cv2.polylines(img_l, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
         # cv2.namedWindow('detector', cv2.WINDOW_NORMAL)
         # cv2.resizeWindow('detector', 800, 300)
         # cv2.imshow('detector', img_l)
@@ -162,6 +167,8 @@ def detect_small_img(img1, img2, prior_check):
         print(tuple(dst[1][0]))
         # img_detect = cv2.polylines(img1, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
         img_detect = cv2.rectangle(img1, (int(ru_x_new), int(ru_y_new)), (int(ld_x_new), int(ld_y_new)), (255, 255, 0), 2).copy()
+        # img_l = cv2.rectangle(img1, (int(ru_x_new), int(ru_y_new)), (int(ld_x_new), int(ld_y_new)), (255, 255, 0),
+        #                           2).copy()
 
         draw_params = dict(matchColor=(0, 255, 0),  # draw matches in green color
                            singlePointColor=None,
@@ -173,11 +180,11 @@ def detect_small_img(img1, img2, prior_check):
         time_cost = (end - start) * 1000
         print("cost:%.4f ms" % time_cost)
 
-        # cv2.namedWindow('detector', cv2.WINDOW_NORMAL)
-        # cv2.resizeWindow('detector', 800, 300)
-        # cv2.imshow('detector', img_detect)
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
+        cv2.namedWindow('detector', cv2.WINDOW_NORMAL)
+        cv2.resizeWindow('detector', 800, 600)
+        cv2.imshow('detector', img_detect)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
     else:
         print("Not enough matches are found - %d/%d" % (len(good), MIN_MATCH_COUNT))
