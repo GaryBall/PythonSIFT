@@ -6,6 +6,7 @@ import time
 
 MIN_MATCH_COUNT = 10
 FLANN_INDEX_LSH = 6
+SCAN_RATIO = 0.5
 
 
 def main():
@@ -13,23 +14,27 @@ def main():
 
     prior_check = ()
 
-    for i in range(10):
-        img1 = cv2.imread('1.jpg', 0)  # queryImage
-        img2 = cv2.imread('2.jpg', 0)  # trainImage
+    for i in range(2):
+        img1 = cv2.imread('test/logo_l.jpg', 0)  # queryImage
+        img2 = cv2.imread('test/logo_s.jpg', 0)  # trainImage
+        # img1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+        # img2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+
+        # brisk_detector(img1, img2)
 
         img3, prior_check = detect_small_img(img1, img2, prior_check)
         if prior_check:
             cv2.namedWindow('detector', cv2.WINDOW_NORMAL)
-            cv2.resizeWindow('detector', 800, 300)
+            cv2.resizeWindow('detector', 800, 600)
             cv2.imshow('detector', img3)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
-            cv2.imwrite('output.png', img3)
+            cv2.imwrite('output1.png', img3)
 
 
 def detect_small_img(img1, img2, prior_check):
     start = time.time()
-    img_r = img2
+    img_r = img2.copy()
     if prior_check:
         ld_y = prior_check[1][1]
         ru_y = prior_check[0][1]
@@ -52,10 +57,9 @@ def detect_small_img(img1, img2, prior_check):
     orb = cv2.ORB_create()
 
     kp1, des1 = orb.detectAndCompute(img_l, None)
-    # print(img1.shape)
-    # print(img_l.shape)
+    # img_l - train img
     kp2, des2 = orb.detectAndCompute(img_r, None)
-    # print(img_r.shape)
+    # img_r - query img
 
     # Initialize and use FLANN
     # index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
@@ -81,7 +85,7 @@ def detect_small_img(img1, img2, prior_check):
         for m, n in matches:
             if m.distance < 0.7 * n.distance:
                 good.append(m)
-                if m.distance < 0.4 * n.distance:
+                if m.distance < SCAN_RATIO * n.distance:
                     count += 1
                     avg_xl += kp1[m.queryIdx].pt[0]
                     avg_yl += kp1[m.queryIdx].pt[1]
@@ -105,16 +109,24 @@ def detect_small_img(img1, img2, prior_check):
         pass
 
     if len(good) > MIN_MATCH_COUNT:
-        src_pts = np.float32([kp1[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
-        dst_pts = np.float32([kp2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+        src_pts = np.float32([kp2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+        dst_pts = np.float32([kp1[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
 
-        M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 30)
+        M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 20)
         matchesMask = mask.ravel().tolist()
 
         # h,w = img1.shape
         pts = np.float32([[0, 0], [0, h2 - 1], [w2 - 1, h2 - 1], [w2 - 1, 0]]).reshape(-1, 1, 2)
         dst = cv2.perspectiveTransform(pts, M)
-        # img2 = cv2.polylines(img2, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
+        img_l = cv2.polylines(img_l, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
+        # cv2.namedWindow('detector', cv2.WINDOW_NORMAL)
+        # cv2.resizeWindow('detector', 800, 300)
+        # cv2.imshow('detector', img_l)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+
+        if count == 0:
+            count = 1
 
         avg_xl = avg_xl / count
         avg_yl = avg_yl / count
@@ -142,12 +154,15 @@ def detect_small_img(img1, img2, prior_check):
             ld_y_new = avg_yl - dis_rate * avg_yr
 
         # print(dis_rate)
+        print(tuple(dst[1][0]))
+        # img_detect = cv2.polylines(img1, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
         img_detect = cv2.rectangle(img1, (int(ru_x_new), int(ru_y_new)), (int(ld_x_new), int(ld_y_new)), (255, 255, 0), 2).copy()
 
         draw_params = dict(matchColor=(0, 255, 0),  # draw matches in green color
                            singlePointColor=None,
                            matchesMask=matchesMask,  # draw only inliers
                            flags=2)
+
         img3 = cv2.drawMatches(img_l, kp1, img_r, kp2, good, None, **draw_params)
         end = time.time()
         time_cost = (end - start) * 1000
@@ -174,6 +189,28 @@ def detect_small_img(img1, img2, prior_check):
                       (ld_x_new-extended_value, ld_y_new-extended_value)]
     else:
         return 0, ()
+
+
+def brisk_detector(img1, img2):
+    brisk = cv2.BRISK_create()
+    kpt1, desc1 = brisk.detectAndCompute(img1, None)
+    kpt2, desc2 = brisk.detectAndCompute(img2, None)
+    matcher = cv2.BFMatcher()
+    matches = matcher.knnMatch(desc1, desc2, k=2)
+    good = []
+    for m,n in matches:
+        if m.distance < 0.7 * n.distance:
+            good.append(m)
+
+    # matches.sort(None, None, True)
+    out_img = cv2.drawMatches(img1, kpt1, img2, kpt2, good, None)
+
+    cv2.namedWindow('detector', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('detector', 800, 600)
+    cv2.imshow('detector', out_img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    # cv2.imwrite('output1.png', out_img)
 
 
 if __name__ == '__main__':
