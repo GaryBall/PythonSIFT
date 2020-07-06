@@ -29,7 +29,7 @@ def main():
             cv2.imshow('detector', img3)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
-            cv2.imwrite('output1.png', img3)
+            cv2.imwrite('output/output1.png', img3)
 
 
 def detect_small_img(img1, img2, prior_check):
@@ -63,9 +63,8 @@ def detect_small_img(img1, img2, prior_check):
     kp2, des2 = orb.detectAndCompute(img_r, None)
     # img_r - query img
 
-    # Initialize and use FLANN
+    # 如果要用KD-tree的话需要用这句
     # index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
-
     index_params = dict(algorithm=FLANN_INDEX_LSH,
                         table_number=6,
                         key_size=12,
@@ -74,11 +73,11 @@ def detect_small_img(img1, img2, prior_check):
     search_params = dict(checks=50)
     flann = cv2.FlannBasedMatcher(index_params, search_params)
     if (des1 is not None) and (des2 is not None):
+        # 通过KNN算法进行特征点匹配
         matches = flann.knnMatch(des1, des2, k=2)
     else:
         return 0, ()
 
-    # store all the good matches as per Lowe's ratio test.
     good = []
     flag = 0
     avg_xl = 0
@@ -88,6 +87,7 @@ def detect_small_img(img1, img2, prior_check):
     count = 0
     try:
         for m, n in matches:
+            # Lowe's ratio test. 设置差异阈值为0.7
             if m.distance < 0.7 * n.distance:
                 good.append(m)
                 if m.distance < SCAN_RATIO * n.distance:
@@ -105,35 +105,29 @@ def detect_small_img(img1, img2, prior_check):
                         # print(kp1[m.queryIdx].pt[0])
                     if kp1[m.queryIdx].pt[0] < kp1[min[0]].pt[0]:
                         min = (m.queryIdx, m.trainIdx)
-                        # print(kp1[m.queryIdx].pt[0])
-                        # pt1 = kp1[m.queryIdx].pt  # trainIdx    是匹配之后所对应关键点的序号，第一个载入图片的匹配关键点序号
-                        # pt2 = kp2[m.trainIdx].pt  # queryIdx  是匹配之后所对应关键点的序号，第二个载入图片的匹配关键点序号
 
     except:
         print("an error happened, resetting...")
         pass
 
+    # 如果优秀的点大于认为有效的最小阈值，才开始画框
     if len(good) > MIN_MATCH_COUNT:
         src_pts = np.float32([kp2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
         dst_pts = np.float32([kp1[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
 
+        # RANSAC进一步将离群点剔除
         M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 20)
         matchesMask = mask.ravel().tolist()
 
-        # h,w = img1.shape
+
         pts = np.float32([[0, 0], [0, h2 - 1], [w2 - 1, h2 - 1], [w2 - 1, 0]]).reshape(-1, 1, 2)
         dst = cv2.perspectiveTransform(pts, M)
-        # img_l = cv2.polylines(img_l, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
-        # cv2.namedWindow('detector', cv2.WINDOW_NORMAL)
-        # cv2.resizeWindow('detector', 800, 300)
-        # cv2.imshow('detector', img_l)
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
 
         if count == 0:
             count = 1
 
         try:
+            # 计算参考点坐标
             avg_xl = avg_xl / count
             avg_yl = avg_yl / count
             avg_xr = avg_xr / count
@@ -147,9 +141,10 @@ def detect_small_img(img1, img2, prior_check):
             return 0
 
 
-        # print(h1, w1, h2, w2)
+        # 计算变换比例
         dis_rate = np.sqrt((pt1[0] - pt2[0]) ** 2 + (pt1[1] - pt2[1]) ** 2) / np.sqrt(
             (pt3[0] - pt4[0]) ** 2 + (pt3[1] - pt4[1]) ** 2)
+        # 进行变换，如果有先验的话，需要进行坐标平移
         if prior_check:
             print("prior check value")
             print(ld_x, ld_y, ru_x, ru_y)
@@ -185,6 +180,7 @@ def detect_small_img(img1, img2, prior_check):
         cv2.imshow('detector', img_detect)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
+        cv2.imwrite('output/locating.png', img_detect)
 
     else:
         print("Not enough matches are found - %d/%d" % (len(good), MIN_MATCH_COUNT))
